@@ -14,6 +14,7 @@ const navigation = [
 ];
 
 const adminNavigation = [
+  { name: 'Users & Groups', href: '/admin/users' },
   { name: 'Type Manager', href: '/admin/types' },
   { name: 'Attribute Manager', href: '/admin/attributes' },
   { name: 'Enum Manager', href: '/admin/enums' },
