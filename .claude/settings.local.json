@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npm install)",
+      "Bash(supabase status:*)",
+      "Bash(npx supabase:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(tree:*)",
+      "Bash(psql:*)",
+      "Bash(docker ps:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

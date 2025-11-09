@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+app/node_modules/
+
+# Build outputs
+.next/
+app/.next/
+app/out/
+app/build/
+dist/
+
+# Environment variables
+.env
+.env.local
+.env*.local
+app/.env
+app/.env.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Supabase
+.branches/
+.temp/
+
+# Backup files (optional - uncomment if you don't want to commit backups)
+# backups/
+
+# Test coverage
+coverage/
+
+# Misc
+*.pem
