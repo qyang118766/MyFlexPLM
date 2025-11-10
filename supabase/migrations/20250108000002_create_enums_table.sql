@@ -5,7 +5,7 @@
 -- 1. 创建 enums 表
 -- =====================================================
 CREATE TABLE enums (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   enum_type VARCHAR(50) NOT NULL,           -- 枚举类型，如 'season_status', 'product_status'
   enum_value VARCHAR(100) NOT NULL,         -- 枚举值
   label VARCHAR(255) NOT NULL,              -- 显示标签（用于UI）

@@ -2,12 +2,7 @@
 -- 完整的数据库表结构定义
 
 -- =====================================================
--- 1. 启用必要的扩展
--- =====================================================
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- =====================================================
--- 2. 自定义枚举类型
+-- 1. 自定义枚举类型
 -- =====================================================
 
 -- 实体类型枚举
@@ -76,7 +71,7 @@ CREATE TYPE bom_status_enum AS ENUM (
 
 -- 实体类型节点表（树形结构）
 CREATE TABLE entity_type_nodes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_type entity_type_enum NOT NULL,
   parent_id UUID REFERENCES entity_type_nodes(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
@@ -91,7 +86,7 @@ CREATE INDEX idx_entity_type_nodes_parent_id ON entity_type_nodes(parent_id);
 
 -- 属性定义表
 CREATE TABLE attribute_definitions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_type entity_type_enum NOT NULL,
   key VARCHAR(100) NOT NULL,
   label VARCHAR(255) NOT NULL,
@@ -133,7 +128,7 @@ CREATE INDEX idx_users_is_admin ON users(is_admin);
 
 -- 5.1 Seasons（季度/季节表）
 CREATE TABLE seasons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
   year INTEGER NOT NULL,
@@ -152,7 +147,7 @@ CREATE INDEX idx_seasons_year ON seasons(year);
 
 -- 5.2 Products（产品表）
 CREATE TABLE products (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   style_code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
   gender VARCHAR(50),
@@ -172,7 +167,7 @@ CREATE INDEX idx_products_type_id ON products(type_id);
 
 -- 5.3 Materials（物料表）
 CREATE TABLE materials (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
   status material_status_enum NOT NULL DEFAULT 'in_development',
@@ -189,7 +184,7 @@ CREATE INDEX idx_materials_type_id ON materials(type_id);
 
 -- 5.4 Suppliers（供应商表）
 CREATE TABLE suppliers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   supplier_code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
   region VARCHAR(100),
@@ -207,7 +202,7 @@ CREATE INDEX idx_suppliers_type_id ON suppliers(type_id);
 
 -- 5.5 Colors（颜色表）
 CREATE TABLE colors (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   color_code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
   rgb_hex VARCHAR(7),
@@ -229,7 +224,7 @@ CREATE INDEX idx_colors_type_id ON colors(type_id);
 
 -- 6.1 Material-Supplier 关联表（物料-供应商-价格）
 CREATE TABLE material_suppliers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
   supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
   price NUMERIC(12, 2),
@@ -246,7 +241,7 @@ CREATE INDEX idx_material_suppliers_supplier_id ON material_suppliers(supplier_i
 
 -- 6.2 Material-Color 关联表（物料-颜色）
 CREATE TABLE material_colors (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   material_id UUID NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
   color_id UUID NOT NULL REFERENCES colors(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -260,7 +255,7 @@ CREATE INDEX idx_material_colors_color_id ON material_colors(color_id);
 
 -- 6.3 Product BOM 表（产品物料清单）
 CREATE TABLE product_boms (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   status bom_status_enum NOT NULL DEFAULT 'draft',
@@ -274,7 +269,7 @@ CREATE INDEX idx_product_boms_status ON product_boms(status);
 
 -- 6.4 BOM Items 表（BOM行项目 - 单层BOM）
 CREATE TABLE bom_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   bom_id UUID NOT NULL REFERENCES product_boms(id) ON DELETE CASCADE,
   line_number INTEGER NOT NULL,
   material_id UUID NOT NULL REFERENCES materials(id) ON DELETE RESTRICT,

@@ -6,7 +6,7 @@
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS groups (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR NOT NULL,
   code VARCHAR,
   parent_id UUID REFERENCES groups(id) ON DELETE CASCADE,
@@ -40,7 +40,7 @@ UPDATE users SET role = 'admin' WHERE is_admin = true;
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS user_groups (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -57,7 +57,7 @@ COMMENT ON TABLE user_groups IS 'Many-to-many relationship between users and gro
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS type_node_permissions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type_node_id UUID NOT NULL REFERENCES entity_type_nodes(id) ON DELETE CASCADE,
   group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
   permission_level VARCHAR NOT NULL CHECK (permission_level IN ('none', 'read', 'write')),
@@ -77,7 +77,7 @@ COMMENT ON COLUMN type_node_permissions.group_id IS 'NULL means this is the defa
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS attribute_permissions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   attribute_id UUID NOT NULL REFERENCES attribute_definitions(id) ON DELETE CASCADE,
   group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
   permission_level VARCHAR NOT NULL CHECK (permission_level IN ('none', 'read', 'write')),
