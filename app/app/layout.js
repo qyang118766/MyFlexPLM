@@ -7,6 +7,9 @@ export const metadata = {
   description: 'Lightweight Product Lifecycle Management System',
 };
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default async function RootLayout({ children }) {
   let user = null;
   let isSuperAdmin = false;
