@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getEnumValuesList, ENUM_TYPES } from '@/lib/services/enums';
 import { createVersionedItem, executeVersionedUpdate } from '@/lib/services/versionControl';
+import { assertPermission } from '@/lib/permissions';
 
 function normalizeText(value) {
   if (value === null || value === undefined) return null;
@@ -117,6 +118,9 @@ export async function createMaterial(formData) {
     throw new Error('Material type must be selected.');
   }
 
+  // Check permission - user must have 'create' or higher permission for this type node
+  await assertPermission(typeId, 'create', 'You do not have permission to create materials of this type.');
+
   const attributeDefs = await fetchAttributeDefs(supabase);
   const attributesPayload = buildAttributesPayload(attributeDefs, formData);
   const timestamp = new Date().toISOString();
@@ -162,6 +166,9 @@ export async function updateMaterial(formData) {
     throw new Error('Material not found.');
   }
 
+  // Check permission - user must have 'edit' or higher permission for this type node
+  await assertPermission(existingMaterial.type_id, 'edit', 'You do not have permission to edit this material.');
+
   const materialCode = existingMaterial.material_code;
   const name = normalizeText(formData.get('name'));
   const typeId = normalizeText(formData.get('type_id')) || existingMaterial.type_id;
@@ -206,6 +213,20 @@ export async function deleteMaterial(formData) {
   if (!materialId) {
     throw new Error('Material id is required.');
   }
+
+  // Get material's type_id before deleting
+  const { data: material, error: fetchError } = await supabase
+    .from('materials')
+    .select('type_id')
+    .eq('id', materialId)
+    .single();
+
+  if (fetchError || !material) {
+    throw new Error('Material not found.');
+  }
+
+  // Check permission - user must have 'delete' or 'full' permission for this type node
+  await assertPermission(material.type_id, 'delete', 'You do not have permission to delete this material.');
 
   const { error } = await supabase.from('materials').delete().eq('id', materialId);
 

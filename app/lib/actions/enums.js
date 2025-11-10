@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * 辅助函数：标准化文本
+ * Helper: normalize text input.
  */
 function normalizeText(value) {
   if (value === null || value === undefined) return null;

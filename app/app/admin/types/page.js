@@ -10,6 +10,12 @@ export default async function TypeManagerPage() {
     .order('entity_type', { ascending: true })
     .order('display_order', { ascending: true });
 
+  // Load groups for permission configuration
+  const { data: groups } = await supabase
+    .from('groups')
+    .select('*')
+    .order('display_order', { ascending: true });
+
   // Group by entity type
   const groupedTypes = typeNodes?.reduce((acc, node) => {
     if (!acc[node.entity_type]) {
@@ -44,6 +50,7 @@ export default async function TypeManagerPage() {
               <TypeTreeView
                 entityType={entityType}
                 nodes={groupedTypes[entityType] || []}
+                groups={groups || []}
               />
             </div>
           </div>

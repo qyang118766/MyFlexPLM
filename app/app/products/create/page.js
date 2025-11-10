@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createProduct } from '@/lib/actions/products';
 import { getEnumValues, ENUM_TYPES } from '@/lib/services/enums';
 import TypeTreeSelector from '@/components/TypeTreeSelector';
-import { getVisibleAttributes } from '@/lib/services/attributeFiltering';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
+import { getUserPermissionSummary, checkUserPermission } from '@/lib/permissions';
 
 function formatSeason(season) {
   if (!season) return '';
@@ -40,12 +41,14 @@ function parseOptions(rawOptions) {
 
 function AttributeField({ attribute }) {
   const inputName = `attribute_${attribute.key}`;
+  const isReadOnly = attribute.permission_level === 'read-only';
   const commonProps = {
     name: inputName,
     id: inputName,
     className:
-      'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500',
+      `mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`,
     required: attribute.required || false,
+    disabled: isReadOnly,
   };
 
   switch (attribute.data_type) {
@@ -120,6 +123,29 @@ export default async function CreateProductPage({ searchParams }) {
 
   const supabase = await createClient();
 
+  // Check user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const productPermission = userPermissions?.entityPermissions?.product || 'none';
+
+  // If user doesn't have at least create permission, deny access
+  if (!userPermissions?.isAdmin && !['create', 'delete', 'full'].includes(productPermission)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to create products.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Go to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // 获取所有 product 类型节点
   const { data: typeNodes, error: typeNodesError } = await supabase
     .from('entity_type_nodes')
@@ -157,6 +183,27 @@ export default async function CreateProductPage({ searchParams }) {
     );
   }
 
+  // If typeId is selected, also check permission for this specific node
+  if (!userPermissions?.isAdmin) {
+    const hasPermission = await checkUserPermission(typeId, 'create');
+    if (!hasPermission) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+            <p className="text-gray-600 mb-4">You do not have permission to create products of this type.</p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Go to Home
+            </Link>
+          </div>
+        </div>
+      );
+    }
+  }
+
   // 如果选择了类型，显示创建表单
   // 构建类型路径
   const typePath = await buildTypePath(supabase, typeId);
@@ -174,8 +221,8 @@ export default async function CreateProductPage({ searchParams }) {
     throw new Error(seasonsError.message);
   }
 
-  // Get attributes visible to this type node (respects scope)
-  const attributeDefs = await getVisibleAttributes(supabase, 'product', typeId);
+  // Get attributes with permission levels (hidden attributes are filtered out)
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'product', typeId);
 
   // 格式化类型路径为字符串
   const typePathString = typePath.map(node => node.name).join(' > ');

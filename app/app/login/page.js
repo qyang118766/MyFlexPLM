@@ -1,16 +1,14 @@
 'use client';
 
-import { login, signup } from '@/lib/actions/auth';
+import { login } from '@/lib/actions/auth';
 import { useState } from 'react';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
-  const [isSignup, setIsSignup] = useState(false);
 
   async function handleSubmit(formData) {
     setError('');
-    const action = isSignup ? signup : login;
-    const result = await action(formData);
+    const result = await login(formData);
     if (result?.error) {
       setError(result.error);
     }
@@ -24,7 +22,7 @@ export default function LoginPage() {
             FlexLite PLM
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {isSignup ? 'Create a new account' : 'Sign in to your account'}
+            Sign in to your account
           </p>
         </div>
 
@@ -71,27 +69,16 @@ export default function LoginPage() {
               type="submit"
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {isSignup ? 'Sign up' : 'Sign in'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignup(!isSignup);
-                setError('');
-              }}
-              className="text-sm text-indigo-600 hover:text-indigo-500"
-            >
-              {isSignup ? 'Already have an account? Sign in' : 'Don&apos;t have an account? Sign up'}
+              Sign in
             </button>
           </div>
         </form>
 
         <div className="mt-4 p-4 bg-blue-50 rounded-md">
           <p className="text-xs text-blue-800">
-            <strong>Local Development:</strong> Use any email and password to sign up (local Supabase doesn&apos;t send real emails)
+            <strong>Default Admin Account:</strong><br/>
+            Email: admin@flexlite.local<br/>
+            Password: 123456
           </p>
         </div>
       </div>

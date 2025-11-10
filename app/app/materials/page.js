@@ -2,15 +2,44 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import ConfirmDeleteButton from '@/components/ConfirmDeleteButton';
 import { removeMaterial } from './remove/action';
+import { getUserPermissionSummary, getUserAccessibleTypeNodes } from '@/lib/permissions';
 
 export default async function MaterialsPage() {
   const supabase = await createClient();
 
+  // Get user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const materialPermission = userPermissions?.entityPermissions?.material || 'none';
+
+  // If user has no read permission, show access denied
+  if (materialPermission === 'none') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600">You do not have permission to view materials.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Get accessible type nodes for filtering
+  const accessibleNodesResult = await getUserAccessibleTypeNodes('material');
+  const accessibleNodeIds = accessibleNodesResult.data?.map(n => n.id) || [];
+
   // Use the materials_latest view which JOINs material_master with latest materials
-  const { data: materials, error } = await supabase
+  let query = supabase
     .from('materials_latest')
     .select('*')
     .order('created_at', { ascending: false });
+
+  // Filter by accessible type nodes if not admin
+  if (!userPermissions?.isAdmin && accessibleNodeIds.length > 0) {
+    query = query.in('type_id', accessibleNodeIds);
+  }
+
+  const { data: materials, error } = await query;
 
   return (
     <div>
@@ -24,13 +53,22 @@ export default async function MaterialsPage() {
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-medium text-gray-900">All Materials</h2>
-            <Link
-              href="/materials/create"
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-            >
-              Create Material
-            </Link>
+            <h2 className="text-lg font-medium text-gray-900">
+              All Materials
+              {!userPermissions?.isAdmin && (
+                <span className="ml-2 text-xs text-gray-500">
+                  (Permission: {materialPermission})
+                </span>
+              )}
+            </h2>
+            {(['create', 'delete', 'full'].includes(materialPermission) || userPermissions?.isAdmin) && (
+              <Link
+                href="/materials/create"
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+              >
+                Create Material
+              </Link>
+            )}
           </div>
 
           {error && (
@@ -81,16 +119,36 @@ export default async function MaterialsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-4">
+                        {/* View is always available if user can see the list */}
                         <Link
-                          href={`/materials/edit?materialId=${material.id}`}
+                          href={`/materials/view?id=${material.id}`}
                           className="text-indigo-600 hover:text-indigo-900"
                         >
-                          Edit
+                          View
                         </Link>
-                        <form action={removeMaterial} className="inline-block">
-                          <input type="hidden" name="material_id" value={material.id} />
-                          <ConfirmDeleteButton label="Delete" entityName="this material" />
-                        </form>
+
+                        {/* Edit requires 'edit' or higher permission */}
+                        {(['edit', 'create', 'delete', 'full'].includes(materialPermission) || userPermissions?.isAdmin) && (
+                          <Link
+                            href={`/materials/edit?materialId=${material.id}`}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit
+                          </Link>
+                        )}
+
+                        {/* Delete requires 'delete' or 'full' permission */}
+                        {(['delete', 'full'].includes(materialPermission) || userPermissions?.isAdmin) && (
+                          <form action={removeMaterial} className="inline-block">
+                            <input type="hidden" name="material_id" value={material.id} />
+                            <ConfirmDeleteButton label="Delete" entityName="this material" />
+                          </form>
+                        )}
+
+                        {/* Show message if user only has read permission */}
+                        {materialPermission === 'read' && !userPermissions?.isAdmin && (
+                          <span className="text-gray-400 text-xs italic">(Read-only)</span>
+                        )}
                       </td>
                     </tr>
                   ))

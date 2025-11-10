@@ -9,6 +9,7 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   let user = null;
+  let isSuperAdmin = false;
 
   try {
     const supabase = await createClient();
@@ -17,8 +18,17 @@ export default async function RootLayout({ children }) {
       error,
     } = await supabase.auth.getUser();
 
-    if (!error) {
+    if (!error && supabaseUser) {
       user = supabaseUser;
+
+      // Get user's superadmin status from database
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_superadmin')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      isSuperAdmin = userData?.is_superadmin || false;
     }
   } catch (error) {
     console.error('Unable to determine auth state, rendering logged-out layout.', error);
@@ -28,7 +38,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {user ? <AppLayout user={user}>{children}</AppLayout> : children}
+        {user ? <AppLayout user={user} isSuperAdmin={isSuperAdmin}>{children}</AppLayout> : children}
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getEnumValuesList, ENUM_TYPES } from '@/lib/services/enums';
 import { createVersionedItem, executeVersionedUpdate } from '@/lib/services/versionControl';
+import { assertPermission, checkUserPermission } from '@/lib/permissions';
 
 function normalizeText(value) {
   if (value === null || value === undefined) return null;
@@ -105,6 +106,9 @@ export async function createProduct(formData) {
     throw new Error('Product type must be selected.');
   }
 
+  // Check permission - user must have 'create' or higher permission for this type node
+  await assertPermission(typeId, 'create', 'You do not have permission to create products of this type.');
+
   const gender = normalizeSelect(formData.get('gender'), validGenders, 'unisex');
   const status = normalizeSelect(formData.get('status'), validStatuses, 'development');
   const seasonId = normalizeText(formData.get('season_id'));
@@ -166,6 +170,9 @@ export async function updateProduct(formData) {
   if (existingError || !existingProduct) {
     throw new Error('Product not found.');
   }
+
+  // Check permission - user must have 'edit' or higher permission for this type node
+  await assertPermission(existingProduct.type_id, 'edit', 'You do not have permission to edit this product.');
 
   const styleCode = existingProduct.style_code;
   const name = normalizeText(formData.get('name'));

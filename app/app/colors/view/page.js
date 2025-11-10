@@ -2,6 +2,7 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { buildTypePath, formatTypePath } from '@/lib/data/typeNodes';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
 
 function formatDate(value) {
   if (!value) return 'N/A';
@@ -42,7 +43,17 @@ export default async function ColorViewPage({ searchParams }) {
 
   const typePath = await buildTypePath(supabase, color.type_id);
   const typePathString = formatTypePath(typePath);
-  const attributeEntries = Object.entries(color.attributes || {});
+
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'color', color.type_id);
+  const attributeDefsMap = attributeDefs.reduce((acc, attr) => {
+    acc[attr.key] = attr;
+    return acc;
+  }, {});
+
+  const colorAttributes = color.attributes || {};
+  const visibleAttributeEntries = Object.entries(colorAttributes).filter(
+    ([key]) => attributeDefsMap[key]
+  );
 
   return (
     <div className="space-y-8">
@@ -99,16 +110,21 @@ export default async function ColorViewPage({ searchParams }) {
 
           <div>
             <p className="text-sm font-semibold text-gray-900 mb-3">Custom Attributes</p>
-            {attributeEntries.length === 0 ? (
-              <p className="text-sm text-gray-500">No custom attributes.</p>
+            {visibleAttributeEntries.length === 0 ? (
+              <p className="text-sm text-gray-500">No custom attributes visible.</p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {attributeEntries.map(([key, value]) => (
-                  <div key={key} className="border rounded-lg p-4 bg-gray-50">
-                    <p className="text-xs uppercase tracking-wider text-gray-500">{key}</p>
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">{renderValue(value)}</p>
-                  </div>
-                ))}
+                {visibleAttributeEntries.map(([key, value]) => {
+                  const attrDef = attributeDefsMap[key];
+                  return (
+                    <div key={key} className="border rounded-lg p-4 bg-gray-50">
+                      <p className="text-xs uppercase tracking-wider text-gray-500">
+                        {attrDef?.label || key}
+                      </p>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">{renderValue(value)}</p>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

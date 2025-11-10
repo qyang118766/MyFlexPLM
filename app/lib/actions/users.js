@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -8,6 +9,9 @@ import { revalidatePath } from 'next/cache';
  */
 export async function createUser(formData) {
   try {
+    // Use admin client for auth operations
+    const adminClient = createAdminClient();
+    // Use regular client for database operations with RLS
     const supabase = await createClient();
 
     const email = formData.get('email');
@@ -20,37 +24,43 @@ export async function createUser(formData) {
       throw new Error('Email, display name, and initial password are required');
     }
 
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Create user in Supabase Auth using admin client
+    // The trigger will automatically create the user record in public.users
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
       password: initialPassword,
       email_confirm: true, // Auto-confirm email for admin-created users
+      user_metadata: {
+        display_name: displayName
+      }
     });
 
     if (authError) {
       throw new Error(`Failed to create auth user: ${authError.message}`);
     }
 
-    // Create user record in users table
-    const { data: userData, error: userError } = await supabase
+    // Wait a moment for the trigger to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Update the user record created by trigger with the correct role and superadmin status
+    const { data: userData, error: userError } = await adminClient
       .from('users')
-      .insert({
-        id: authData.user.id,
-        email,
+      .update({
         display_name: displayName,
         role,
-        is_admin: role === 'admin',
+        is_superadmin: role === 'admin',
       })
+      .eq('id', authData.user.id)
       .select()
       .single();
 
     if (userError) {
-      // Rollback: Delete auth user
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      throw new Error(`Failed to create user record: ${userError.message}`);
+      // Rollback: Delete auth user (cascade will delete user record)
+      await adminClient.auth.admin.deleteUser(authData.user.id);
+      throw new Error(`Failed to update user record: ${userError.message}`);
     }
 
-    // Assign groups if provided
+    // Assign groups if provided (using admin client)
     if (groupIds) {
       const groups = JSON.parse(groupIds);
       if (groups.length > 0) {
@@ -59,7 +69,7 @@ export async function createUser(formData) {
           group_id: groupId,
         }));
 
-        const { error: groupError } = await supabase
+        const { error: groupError } = await adminClient
           .from('user_groups')
           .insert(userGroupRecords);
 
@@ -100,7 +110,7 @@ export async function updateUser(formData) {
       .update({
         display_name: displayName,
         role,
-        is_admin: role === 'admin',
+        is_superadmin: role === 'admin',
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
@@ -150,7 +160,7 @@ export async function updateUser(formData) {
  */
 export async function resetUserPassword(formData) {
   try {
-    const supabase = await createClient();
+    const adminClient = createAdminClient();
 
     const userId = formData.get('user_id');
     const newPassword = formData.get('new_password');
@@ -160,7 +170,7 @@ export async function resetUserPassword(formData) {
     }
 
     // Update password using Supabase Admin API
-    const { data, error } = await supabase.auth.admin.updateUserById(userId, {
+    const { data, error } = await adminClient.auth.admin.updateUserById(userId, {
       password: newPassword,
     });
 
@@ -180,7 +190,7 @@ export async function resetUserPassword(formData) {
  */
 export async function deleteUser(formData) {
   try {
-    const supabase = await createClient();
+    const adminClient = createAdminClient();
 
     const userId = formData.get('user_id');
 
@@ -189,7 +199,7 @@ export async function deleteUser(formData) {
     }
 
     // Delete from users table (cascade will delete user_groups)
-    const { error: dbError } = await supabase
+    const { error: dbError } = await adminClient
       .from('users')
       .delete()
       .eq('id', userId);
@@ -199,7 +209,7 @@ export async function deleteUser(formData) {
     }
 
     // Delete from Supabase Auth
-    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
 
     if (authError) {
       console.error('Error deleting auth user:', authError);

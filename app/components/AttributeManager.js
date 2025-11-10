@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createAttribute, updateAttribute, toggleAttributeStatus, deleteAttribute } from '@/lib/actions/attributes';
+import { getAttributePermissions, updateAttributePermissions } from '@/lib/actions/attribute-permissions';
+import AttributePermissionMatrix from '@/components/AttributePermissionMatrix';
 
-export default function AttributeManager({ entityType, attributes, typeNodes }) {
+export default function AttributeManager({ entityType, attributes, typeNodes, groups }) {
   const [showDialog, setShowDialog] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState(null);
 
@@ -181,6 +183,7 @@ export default function AttributeManager({ entityType, attributes, typeNodes }) 
         <AttributeDialog
           entityType={entityType}
           typeNodes={typeNodes}
+          groups={groups}
           editAttribute={editingAttribute}
           onClose={() => {
             setShowDialog(false);
@@ -193,7 +196,7 @@ export default function AttributeManager({ entityType, attributes, typeNodes }) 
 }
 
 // Dialog for adding/editing attributes
-function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
+function AttributeDialog({ entityType, typeNodes, groups, editAttribute, onClose }) {
   const [formData, setFormData] = useState({
     key: editAttribute?.key || '',
     label: editAttribute?.label || '',
@@ -204,7 +207,9 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
     type_node_id: editAttribute?.type_node_id || '',
     options: editAttribute?.options ? JSON.stringify(editAttribute.options, null, 2) : '',
   });
+  const [permissions, setPermissions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [error, setError] = useState(null);
   const [showTypePicker, setShowTypePicker] = useState(false);
 
@@ -216,6 +221,26 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
     { value: 'enum', label: 'Enum (Select from options)' },
   ];
 
+  // Load existing permissions when editing
+  useEffect(() => {
+    async function loadPermissions() {
+      if (editAttribute) {
+        setIsLoadingPermissions(true);
+        const result = await getAttributePermissions(editAttribute.id);
+        if (result.success) {
+          // Convert to PermissionSelector format
+          const formattedPermissions = result.data.map(p => ({
+            groupId: p.group_id,
+            permissionLevel: p.permission_level,
+          }));
+          setPermissions(formattedPermissions);
+        }
+        setIsLoadingPermissions(false);
+      }
+    }
+    loadPermissions();
+  }, [editAttribute]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -223,9 +248,11 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
 
     try {
       const data = new FormData();
+      let attributeId;
 
       if (editAttribute) {
         data.append('id', editAttribute.id);
+        attributeId = editAttribute.id;
       } else {
         data.append('entity_type', entityType);
       }
@@ -256,6 +283,17 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
         throw new Error(result.error);
       }
 
+      // Get attribute ID for new attributes
+      if (!editAttribute) {
+        attributeId = result.data.id;
+      }
+
+      // Update permissions
+      const permResult = await updateAttributePermissions(attributeId, permissions);
+      if (!permResult.success) {
+        throw new Error(permResult.error);
+      }
+
       onClose();
     } catch (err) {
       setError(err.message);
@@ -281,7 +319,7 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 m-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full p-6 m-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg font-semibold mb-4">
           {editAttribute ? 'Edit Attribute' : 'Add New Attribute'}
         </h3>
@@ -438,6 +476,24 @@ function AttributeDialog({ entityType, typeNodes, editAttribute, onClose }) {
                   Unique (no duplicates allowed)
                 </label>
               </div>
+            </div>
+
+            {/* Permission Configuration */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Attribute Permissions
+              </label>
+              {isLoadingPermissions ? (
+                <div className="text-sm text-gray-500">Loading permissions...</div>
+              ) : (
+                <AttributePermissionMatrix
+                  groups={groups}
+                  permissions={permissions}
+                  onChange={setPermissions}
+                  attributeId={editAttribute?.id}
+                  typeNodeId={formData.type_node_id}
+                />
+              )}
             </div>
           </div>
 

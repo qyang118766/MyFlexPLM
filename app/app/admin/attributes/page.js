@@ -15,6 +15,12 @@ export default async function AttributeManagerPage() {
     .select('*')
     .order('display_order', { ascending: true });
 
+  // Load groups for permission configuration
+  const { data: groups } = await supabase
+    .from('groups')
+    .select('*')
+    .order('display_order', { ascending: true });
+
   // Group by entity type
   const groupedAttributes = attributes?.reduce((acc, attr) => {
     if (!acc[attr.entity_type]) {
@@ -61,6 +67,7 @@ export default async function AttributeManagerPage() {
                 entityType={entityType}
                 attributes={groupedAttributes[entityType] || []}
                 typeNodes={groupedTypeNodes[entityType] || []}
+                groups={groups || []}
               />
             </div>
           </div>

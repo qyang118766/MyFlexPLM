@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { createSeason } from '@/lib/actions/seasons';
 import { getEnumValues, ENUM_TYPES } from '@/lib/services/enums';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
+import { getUserPermissionSummary } from '@/lib/permissions';
 
 // 季节类型定义（暂时保留为常量，未来可迁移到数据库）
 const SEASON_TYPES = [
@@ -46,12 +48,14 @@ function parseOptions(rawOptions) {
 
 function AttributeField({ attribute }) {
   const inputName = `attribute_${attribute.key}`;
+  const isReadOnly = attribute.permission_level === 'read-only';
   const commonProps = {
     name: inputName,
     id: inputName,
     className:
-      'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500',
+      `mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`,
     required: attribute.required || false,
+    disabled: isReadOnly,
   };
 
   switch (attribute.data_type) {
@@ -101,20 +105,34 @@ function AttributeField({ attribute }) {
 export default async function CreateSeasonPage() {
   const supabase = await createClient();
 
+  // Check user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const seasonPermission = userPermissions?.entityPermissions?.season || 'none';
+
+  // If user doesn't have at least create permission, deny access
+  if (!userPermissions?.isAdmin && !['create', 'delete', 'full'].includes(seasonPermission)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to create seasons.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Go to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // 从数据库获取状态枚举值
   const statusOptions = await getEnumValues(ENUM_TYPES.SEASON_STATUS);
 
-  const { data: attributeDefs, error: attributesError } = await supabase
-    .from('attribute_definitions')
-    .select('*')
-    .eq('entity_type', 'season')
-    .eq('is_active', true)
-    .order('order_index', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  if (attributesError) {
-    throw new Error(attributesError.message);
-  }
+  // Get attributes with permissions (season doesn't have type_id, so pass null)
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'season', null);
 
   const upcomingYears = getUpcomingYears();
 

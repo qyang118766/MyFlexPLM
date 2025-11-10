@@ -15,7 +15,14 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: FlexLite PLM with Type Manager and Attribute Scoping\n\nImplement comprehensive PLM system with the following features:\n\nCore Features:\n- Master-detail architecture for version-controlled entities (Products, Materials, Suppliers)\n- Type Manager with hierarchical type trees and right-click context menu\n- Attribute Manager with scoped attributes and inheritance\n- Proper attribute scope filtering (attributes only visible to defined node and descendants)\n- Version control system with A-Z versions and 1-999 iterations\n- Dynamic attribute system with JSONB storage\n\nDatabase:\n- PostgreSQL with Supabase\n- 10 migration files establishing schema\n- Master tables (product_master, material_master, supplier_master)\n- Version control tables with is_latest flag\n- Type hierarchy support with entity_type_nodes\n- Attribute definitions with type scoping\n\nTechnical Stack:\n- Next.js 16.0.1 with App Router\n- React Server Components\n- Supabase for database and auth\n- Tailwind CSS + shadcn/ui\n- JavaScript (no TypeScript)\n\nKey Implementations:\n- Attribute filtering service respecting type hierarchy\n- Server actions for all CRUD operations\n- Type tree view with expand/collapse\n- Context menu for type management\n- Scoped attribute creation with type picker\n\nDocumentation:\n- ATTRIBUTE_SCOPE_FIX.md\n- TYPE_ATTRIBUTE_MANAGER_IMPLEMENTATION.md\n- MASTER_TABLE_REFACTORING.md\n- VERSION_CONTROL_REFACTORING.md\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git config:*)",
       "Bash(git remote add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(taskkill:*)",
+      "Bash(node scripts/create-admin.js:*)",
+      "Bash(curl:*)",
+      "Bash(docker exec:*)",
+      "Bash(cat:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { updateColor } from '@/lib/actions/colors';
 import { getEnumValues, ENUM_TYPES } from '@/lib/services/enums';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
+import { getUserPermissionSummary, checkUserPermission } from '@/lib/permissions';
 
 function parseOptions(rawOptions) {
   if (!rawOptions) return [];
@@ -32,12 +34,14 @@ function parseOptions(rawOptions) {
 
 function AttributeField({ attribute, value }) {
   const inputName = `attribute_${attribute.key}`;
+  const isReadOnly = attribute.permission_level === 'read-only';
   const commonProps = {
     name: inputName,
     id: inputName,
     className:
-      'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500',
+      `mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`,
     required: attribute.required || false,
+    disabled: isReadOnly,
   };
 
   switch (attribute.data_type) {
@@ -122,30 +126,67 @@ export default async function EditColorPage({ searchParams }) {
     );
   }
 
-  // Fetch enum values from database
-  const statusOptions = await getEnumValues(ENUM_TYPES.COLOR_STATUS);
-
   const supabase = await createClient();
 
-  const [{ data: color, error: colorError }, { data: attributeDefs, error: attributesError }] =
-    await Promise.all([
-      supabase.from('colors').select('*').eq('id', colorId).single(),
-      supabase
-        .from('attribute_definitions')
-        .select('*')
-        .eq('entity_type', 'color')
-        .eq('is_active', true)
-        .order('order_index', { ascending: true })
-        .order('created_at', { ascending: true }),
-    ]);
+  // Check user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const colorPermission = userPermissions?.entityPermissions?.color || 'none';
+
+  // If user doesn't have at least edit permission, deny access
+  if (!userPermissions?.isAdmin && !['edit', 'delete', 'full'].includes(colorPermission)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to edit colors.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Go to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const { data: color, error: colorError } = await supabase
+    .from('colors')
+    .select('*')
+    .eq('id', colorId)
+    .single();
 
   if (colorError || !color) {
     notFound();
   }
 
-  if (attributesError) {
-    throw new Error(attributesError.message);
+  // Check permission for specific type node
+  if (!userPermissions?.isAdmin && color.type_id) {
+    const hasPermission = await checkUserPermission(color.type_id, 'edit');
+    if (!hasPermission) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+            <p className="text-gray-600 mb-4">You do not have permission to edit colors of this type.</p>
+            <Link
+              href="/colors"
+              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Back to Colors
+            </Link>
+          </div>
+        </div>
+      );
+    }
   }
+
+  // Fetch enum values from database
+  const statusOptions = await getEnumValues(ENUM_TYPES.COLOR_STATUS);
+
+  // Get attributes with permissions
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'color', color.type_id);
 
   const colorAttributes = color.attributes || {};
 

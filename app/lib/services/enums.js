@@ -1,13 +1,13 @@
 /**
- * 枚举服务层
- * 从数据库 enums 表读取枚举值，替代原有的配置文件方式
+ * Enumeration service helpers.
+ * Fetches enum definitions from the database instead of static config files.
  */
 
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * 获取指定类型的所有活跃枚举值
- * @param {string} enumType - 枚举类型，如 'season_status', 'product_status'
+ * Fetch all active enum entries for a given type.
+ * @param {string} enumType e.g. 'season_status', 'product_status'
  * @returns {Promise<Array<{value: string, label: string}>>}
  */
 export async function getEnumValues(enumType) {
@@ -26,25 +26,26 @@ export async function getEnumValues(enumType) {
     return [];
   }
 
-  return (data || []).map(item => ({
+  return (data || []).map((item) => ({
     value: item.enum_value,
-    label: item.label
+    label: item.label,
   }));
 }
 
 /**
- * 获取指定类型的所有活跃枚举值（仅返回值数组，用于验证）
- * @param {string} enumType - 枚举类型
+ * Fetch active enum entries for a type and return only the value list.
+ * Useful for validation and form defaults.
+ * @param {string} enumType
  * @returns {Promise<Array<string>>}
  */
 export async function getEnumValuesList(enumType) {
   const values = await getEnumValues(enumType);
-  return values.map(v => v.value);
+  return values.map((value) => value.value);
 }
 
 /**
- * 获取所有枚举类型及其值
- * @returns {Promise<Object>} 按类型分组的枚举对象
+ * Fetch every enum grouped by enum_type.
+ * @returns {Promise<Object>} Object keyed by enum_type with arrays of entries.
  */
 export async function getAllEnums() {
   const supabase = await createClient();
@@ -61,16 +62,15 @@ export async function getAllEnums() {
     return {};
   }
 
-  // 按 enum_type 分组
   const grouped = {};
-  (data || []).forEach(item => {
+  (data || []).forEach((item) => {
     if (!grouped[item.enum_type]) {
       grouped[item.enum_type] = [];
     }
     grouped[item.enum_type].push({
       value: item.enum_value,
       label: item.label,
-      order: item.order_index
+      order: item.order_index,
     });
   });
 
@@ -78,9 +78,9 @@ export async function getAllEnums() {
 }
 
 /**
- * 检查枚举值是否有效
- * @param {string} enumType - 枚举类型
- * @param {string} value - 要检查的值
+ * Check whether a value is valid within an enum type.
+ * @param {string} enumType
+ * @param {string} value
  * @returns {Promise<boolean>}
  */
 export async function isValidEnumValue(enumType, value) {
@@ -89,19 +89,19 @@ export async function isValidEnumValue(enumType, value) {
 }
 
 /**
- * 获取枚举值的显示标签
- * @param {string} enumType - 枚举类型
- * @param {string} value - 枚举值
+ * Get the human-friendly label for a value.
+ * @param {string} enumType
+ * @param {string} value
  * @returns {Promise<string|null>}
  */
 export async function getEnumLabel(enumType, value) {
   const values = await getEnumValues(enumType);
-  const found = values.find(v => v.value === value);
+  const found = values.find((entry) => entry.value === value);
   return found ? found.label : null;
 }
 
 /**
- * 预定义的枚举类型常量（用于代码引用）
+ * Predefined enum type constants used throughout the codebase.
  */
 export const ENUM_TYPES = {
   SEASON_STATUS: 'season_status',
@@ -110,14 +110,14 @@ export const ENUM_TYPES = {
   MATERIAL_STATUS: 'material_status',
   SUPPLIER_STATUS: 'supplier_status',
   COLOR_STATUS: 'color_status',
-  BOM_STATUS: 'bom_status'
+  BOM_STATUS: 'bom_status',
 };
 
 /**
- * 辅助函数：标准化选择值（用于表单处理）
- * @param {string|null} value - 原始值
- * @param {Array<string>} validValues - 有效值列表
- * @param {string} defaultValue - 默认值
+ * Helper: normalize select input (used in forms).
+ * @param {string|null} value - raw input
+ * @param {Array<string>} validValues - allowed values
+ * @param {string} defaultValue - fallback value
  * @returns {string}
  */
 export function normalizeEnumValue(value, validValues, defaultValue) {
@@ -125,3 +125,4 @@ export function normalizeEnumValue(value, validValues, defaultValue) {
   const trimmed = value.trim();
   return validValues.includes(trimmed) ? trimmed : defaultValue;
 }
+

@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { updateSupplier } from '@/lib/actions/suppliers';
 import { getEnumValues, ENUM_TYPES } from '@/lib/services/enums';
-import { getVisibleAttributes } from '@/lib/services/attributeFiltering';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
+import { getUserPermissionSummary, checkUserPermission } from '@/lib/permissions';
 
 function parseOptions(rawOptions) {
   if (!rawOptions) return [];
@@ -33,12 +34,14 @@ function parseOptions(rawOptions) {
 
 function AttributeField({ attribute, value }) {
   const inputName = `attribute_${attribute.key}`;
+  const isReadOnly = attribute.permission_level === 'read-only';
   const commonProps = {
     name: inputName,
     id: inputName,
     className:
-      'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500',
+      `mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`,
     required: attribute.required || false,
+    disabled: isReadOnly,
   };
 
   switch (attribute.data_type) {
@@ -123,10 +126,30 @@ export default async function EditSupplierPage({ searchParams }) {
     );
   }
 
-  // Fetch enum values from database
-  const statusOptions = await getEnumValues(ENUM_TYPES.SUPPLIER_STATUS);
-
   const supabase = await createClient();
+
+  // Check user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const supplierPermission = userPermissions?.entityPermissions?.supplier || 'none';
+
+  // If user doesn't have at least edit permission, deny access
+  if (!userPermissions?.isAdmin && !['edit', 'delete', 'full'].includes(supplierPermission)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to edit suppliers.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Go to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const { data: supplier, error: supplierError } = await supabase
     .from('suppliers')
@@ -138,8 +161,32 @@ export default async function EditSupplierPage({ searchParams }) {
     notFound();
   }
 
-  // Get attributes visible to this supplier's type node (respects scope)
-  const attributeDefs = await getVisibleAttributes(supabase, 'supplier', supplier.type_id);
+  // Check permission for specific type node
+  if (!userPermissions?.isAdmin && supplier.type_id) {
+    const hasPermission = await checkUserPermission(supplier.type_id, 'edit');
+    if (!hasPermission) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+            <p className="text-gray-600 mb-4">You do not have permission to edit suppliers of this type.</p>
+            <Link
+              href="/suppliers"
+              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Back to Suppliers
+            </Link>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Fetch enum values from database
+  const statusOptions = await getEnumValues(ENUM_TYPES.SUPPLIER_STATUS);
+
+  // Get attributes with permissions
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'supplier', supplier.type_id);
 
   const supplierAttributes = supplier.attributes || {};
 

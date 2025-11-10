@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createTypeNode, updateTypeNode, deleteTypeNode } from '@/lib/actions/typeNodes';
+import { getTypeNodePermissions, updateTypeNodePermissions } from '@/lib/actions/permissions';
+import PermissionSelector from '@/components/PermissionSelector';
 
-export default function TypeTreeView({ entityType, nodes }) {
+export default function TypeTreeView({ entityType, nodes, groups }) {
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [contextMenu, setContextMenu] = useState(null);
   const [editingNode, setEditingNode] = useState(null);
@@ -215,6 +217,7 @@ export default function TypeTreeView({ entityType, nodes }) {
           parentId={showAddDialog?.parentId}
           parentName={showAddDialog?.parentName}
           editNode={editingNode}
+          groups={groups}
           onClose={() => {
             setShowAddDialog(null);
             setEditingNode(null);
@@ -226,14 +229,36 @@ export default function TypeTreeView({ entityType, nodes }) {
 }
 
 // Dialog for adding/editing nodes
-function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
+function NodeDialog({ entityType, parentId, parentName, editNode, groups, onClose }) {
   const [formData, setFormData] = useState({
     name: editNode?.name || '',
     code: editNode?.code || '',
     can_have_children: editNode?.can_have_children ?? true,
   });
+  const [permissions, setPermissions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   const [error, setError] = useState(null);
+
+  // Load existing permissions when editing
+  useEffect(() => {
+    async function loadPermissions() {
+      if (editNode) {
+        setIsLoadingPermissions(true);
+        const result = await getTypeNodePermissions(editNode.id);
+        if (result.success) {
+          // Convert to PermissionSelector format
+          const formattedPermissions = result.data.map(p => ({
+            groupId: p.group_id,
+            permissionLevel: p.permission_level,
+          }));
+          setPermissions(formattedPermissions);
+        }
+        setIsLoadingPermissions(false);
+      }
+    }
+    loadPermissions();
+  }, [editNode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -242,6 +267,7 @@ function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
 
     try {
       const data = new FormData();
+      let nodeId;
 
       if (editNode) {
         // Update existing node
@@ -254,6 +280,7 @@ function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
         if (!result.success) {
           throw new Error(result.error);
         }
+        nodeId = editNode.id;
       } else {
         // Create new node
         data.append('entity_type', entityType);
@@ -268,6 +295,13 @@ function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
         if (!result.success) {
           throw new Error(result.error);
         }
+        nodeId = result.data.id;
+      }
+
+      // Update permissions
+      const permResult = await updateTypeNodePermissions(nodeId, permissions);
+      if (!permResult.success) {
+        throw new Error(permResult.error);
       }
 
       onClose();
@@ -280,7 +314,7 @@ function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg font-semibold mb-4">
           {editNode ? 'Edit Type Node' : `Add Child to ${parentName}`}
         </h3>
@@ -331,6 +365,22 @@ function NodeDialog({ entityType, parentId, parentName, editNode, onClose }) {
               <label htmlFor="can_have_children" className="ml-2 text-sm text-gray-700">
                 Can have children (uncheck to make this a leaf node)
               </label>
+            </div>
+
+            {/* Permission Configuration */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Permissions
+              </label>
+              {isLoadingPermissions ? (
+                <div className="text-sm text-gray-500">Loading permissions...</div>
+              ) : (
+                <PermissionSelector
+                  groups={groups}
+                  permissions={permissions}
+                  onChange={setPermissions}
+                />
+              )}
             </div>
           </div>
 

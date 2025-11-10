@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createColor } from '@/lib/actions/colors';
 import { getEnumValues, ENUM_TYPES } from '@/lib/services/enums';
 import { buildTypePath, formatTypePath } from '@/lib/data/typeNodes';
+import { getAttributesWithPermissions } from '@/lib/services/attributePermissions';
+import { getUserPermissionSummary, checkUserPermission } from '@/lib/permissions';
 
 function parseOptions(rawOptions) {
   if (!rawOptions) return [];
@@ -33,12 +35,14 @@ function parseOptions(rawOptions) {
 
 function AttributeField({ attribute }) {
   const inputName = `attribute_${attribute.key}`;
+  const isReadOnly = attribute.permission_level === 'read-only';
   const commonProps = {
     name: inputName,
     id: inputName,
     className:
-      'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500',
+      `mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`,
     required: attribute.required || false,
+    disabled: isReadOnly,
   };
 
   switch (attribute.data_type) {
@@ -91,6 +95,29 @@ export default async function CreateColorPage({ searchParams }) {
 
   const supabase = await createClient();
 
+  // Check user permissions
+  const permissionResult = await getUserPermissionSummary();
+  const userPermissions = permissionResult.data;
+  const colorPermission = userPermissions?.entityPermissions?.color || 'none';
+
+  // If user doesn't have at least create permission, deny access
+  if (!userPermissions?.isAdmin && !['create', 'delete', 'full'].includes(colorPermission)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to create colors.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Go to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { data: typeNodes, error: typeNodesError } = await supabase
     .from('entity_type_nodes')
     .select('*')
@@ -127,22 +154,34 @@ export default async function CreateColorPage({ searchParams }) {
     );
   }
 
+  // If typeId is selected, also check permission for this specific node
+  if (!userPermissions?.isAdmin) {
+    const hasPermission = await checkUserPermission(typeId, 'create');
+    if (!hasPermission) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+            <p className="text-gray-600 mb-4">You do not have permission to create colors of this type.</p>
+            <Link
+              href="/colors"
+              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Back to Colors
+            </Link>
+          </div>
+        </div>
+      );
+    }
+  }
+
   const typePath = await buildTypePath(supabase, typeId);
   const typePathString = formatTypePath(typePath);
 
   const statusOptions = await getEnumValues(ENUM_TYPES.COLOR_STATUS);
 
-  const { data: attributeDefs, error: attributesError } = await supabase
-    .from('attribute_definitions')
-    .select('*')
-    .eq('entity_type', 'color')
-    .eq('is_active', true)
-    .order('order_index', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  if (attributesError) {
-    throw new Error(attributesError.message);
-  }
+  // Get attributes with permissions
+  const attributeDefs = await getAttributesWithPermissions(supabase, 'color', typeId);
 
   return (
     <div className="space-y-8">

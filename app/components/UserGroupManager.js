@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createUser, updateUser, resetUserPassword, deleteUser } from '@/lib/actions/users';
 import { createGroup, updateGroup, deleteGroup } from '@/lib/actions/groups';
+import HierarchicalGroupSelector from './HierarchicalGroupSelector';
+import GroupPermissionEditor from './GroupPermissionEditor';
 
 export default function UserGroupManager({ users, groups, userGroups }) {
   const [activeTab, setActiveTab] = useState('users'); // 'users' or 'groups'
@@ -359,7 +361,7 @@ function GroupTree({ groups, onAddChild, onEdit, onDelete }) {
         tree.map((node) => renderNode(node))
       ) : (
         <div className="p-8 text-center text-gray-500">
-          No groups defined. Click "Add Root Group" to create one.
+          No groups defined. Click &quot;Add Root Group&quot; to create one.
         </div>
       )}
     </div>
@@ -378,12 +380,6 @@ function UserDialog({ user, groups, userGroups, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleGroupToggle = (groupId) => {
-    const newGroups = formData.group_ids.includes(groupId)
-      ? formData.group_ids.filter(id => id !== groupId)
-      : [...formData.group_ids, groupId];
-    setFormData({ ...formData, group_ids: newGroups });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -505,27 +501,11 @@ function UserDialog({ user, groups, userGroups, onClose }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Groups
               </label>
-              <div className="border border-gray-300 rounded-md p-3 max-h-60 overflow-y-auto">
-                {groups.length > 0 ? (
-                  groups.map(group => (
-                    <div key={group.id} className="flex items-center py-1">
-                      <input
-                        type="checkbox"
-                        id={`group-${group.id}`}
-                        checked={formData.group_ids.includes(group.id)}
-                        onChange={() => handleGroupToggle(group.id)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`group-${group.id}`} className="ml-2 text-sm text-gray-700">
-                        {group.name}
-                        {group.code && <span className="ml-2 text-gray-500">({group.code})</span>}
-                      </label>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500">No groups available</p>
-                )}
-              </div>
+              <HierarchicalGroupSelector
+                groups={groups}
+                selectedGroupIds={formData.group_ids}
+                onSelectionChange={(newSelection) => setFormData({ ...formData, group_ids: newSelection })}
+              />
             </div>
           </div>
 
@@ -562,6 +542,7 @@ function GroupDialog({ group, groups, onClose }) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [showPermissions, setShowPermissions] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -664,6 +645,19 @@ function GroupDialog({ group, groups, onClose }) {
                 placeholder="Brief description of this group"
               />
             </div>
+
+            {/* Add Edit Permissions button for existing groups */}
+            {!isNew && (
+              <div className="pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowPermissions(true)}
+                  className="w-full px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100"
+                >
+                  Edit Permissions
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 flex justify-end space-x-3">
@@ -684,6 +678,15 @@ function GroupDialog({ group, groups, onClose }) {
             </button>
           </div>
         </form>
+
+        {/* Show permissions dialog when requested */}
+        {showPermissions && !isNew && (
+          <GroupPermissionsDialog
+            group={group}
+            parentGroup={groups.find(g => g.id === group.parent_id)}
+            onClose={() => setShowPermissions(false)}
+          />
+        )}
       </div>
     </div>
   );
@@ -796,6 +799,163 @@ function PasswordDialog({ user, onClose }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Group Permissions Dialog Component
+function GroupPermissionsDialog({ group, parentGroup, onClose }) {
+  const [entityType, setEntityType] = useState('product');
+  const [typeNodes, setTypeNodes] = useState([]);
+  const [permissions, setPermissions] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const entityTypes = [
+    { value: 'product', label: 'Products' },
+    { value: 'material', label: 'Materials' },
+    { value: 'supplier', label: 'Suppliers' },
+    { value: 'season', label: 'Seasons' },
+    { value: 'color', label: 'Colors' },
+  ];
+
+  // Load data when entity type changes
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const { getTypeNodesForEntity, getGroupPermissions } = await import('@/lib/actions/group-permissions');
+
+        // Load type nodes
+        const nodesResult = await getTypeNodesForEntity(entityType);
+        if (!nodesResult.success) {
+          throw new Error(nodesResult.error);
+        }
+        setTypeNodes(nodesResult.data || []);
+
+        // Load existing permissions
+        const permsResult = await getGroupPermissions(group.id);
+        if (!permsResult.success) {
+          throw new Error(permsResult.error);
+        }
+
+        // Build permission map
+        const permMap = {};
+        (permsResult.data || []).forEach(perm => {
+          if (perm.type_node?.entity_type === entityType) {
+            permMap[perm.type_node_id] = perm.permission_level;
+          }
+        });
+        setPermissions(permMap);
+
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadData();
+  }, [entityType, group.id]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const { saveGroupPermissions } = await import('@/lib/actions/group-permissions');
+
+      const result = await saveGroupPermissions(group.id, permissions, entityType);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      alert('Permissions saved successfully');
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl max-w-5xl w-full my-8">
+        <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-semibold">Group Permissions</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Configure permissions for <span className="font-medium">{group.name}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+        </div>
+
+        <div className="px-6 py-4 border-b bg-gray-50">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Entity Type</label>
+          <div className="flex gap-2">
+            {entityTypes.map(type => (
+              <button
+                key={type.value}
+                onClick={() => setEntityType(type.value)}
+                className={`px-4 py-2 text-sm rounded-md border ${
+                  entityType === type.value
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 max-h-[600px] overflow-y-auto">
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">{error}</div>
+          )}
+
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              <p className="mt-2 text-gray-600">Loading permissions...</p>
+            </div>
+          ) : (
+            <GroupPermissionEditor
+              group={group}
+              parentGroup={parentGroup}
+              entityType={entityType}
+              typeNodes={typeNodes}
+              existingPermissions={Object.entries(permissions).map(([nodeId, level]) => ({
+                type_node_id: nodeId,
+                permission_level: level
+              }))}
+              onPermissionsChange={setPermissions}
+            />
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            disabled={isSaving || isLoading}
+          >
+            {isSaving ? 'Saving...' : 'Save Permissions'}
+          </button>
+        </div>
       </div>
     </div>
   );
